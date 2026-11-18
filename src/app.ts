@@ -10,6 +10,12 @@
    TODO: Define a string enum `Category` with: Food, Travel, Bills, Other.
    ------------------------------------------------------------------------- */
 // enum Category { ... }
+enum Category{
+   Food="Food",
+   Travel="Travel",
+   Bills="Bills",
+   Other="Other",
+}
 
 /* -------------------------------------------------------------------------
    TASK 2 — Model type (LU: TypeTasks Model & Types)
@@ -17,6 +23,12 @@
          id: number, title: string, amount: number, category: Category
    ------------------------------------------------------------------------- */
 // interface Expense { ... }
+interface Expense{
+   id:number;
+   title:string;
+   amount:number;
+   category:Category;
+}
 
 /* -------------------------------------------------------------------------
    TASK 3 — Utility types (LU: Utility Types)
@@ -27,6 +39,9 @@
    ------------------------------------------------------------------------- */
 // type NewExpense = ...
 // type Breakdown  = ...
+type NewExpense=Omit<Expense,"id">;
+type Breakdown=Record<Category,number>;
+type ExpenseUpdate=Pick<Expense,"title"|"category">;
 
 /* -------------------------------------------------------------------------
    TASK 4 — Tuple (LU: Enums & Tuples)
@@ -34,9 +49,13 @@
          (used to return each breakdown row).
    ------------------------------------------------------------------------- */
 // type SummaryRow = ...
+type SummaryRow={
+   category:Category;
+   total:number;
+};
 
 /* In-memory store (already typed once you define Expense above). */
-// const expenses: Expense[] = [];
+const expenses: Expense[] = [];
 let nextId = 1;
 
 /* -------------------------------------------------------------------------
@@ -48,6 +67,36 @@ let nextId = 1;
          invalid category. No `any`.
    ------------------------------------------------------------------------- */
 // function toNewExpense(title: string, amountRaw: string, category: string): NewExpense | null { ... }
+function isCategory(value:string):value is Category{
+   return Object.values(Category).some(
+      (category)=>category===value
+   );
+}
+function toNewExpense(
+   title:string,
+   amountRaw:string,
+   category:string,
+):NewExpense|null{
+   const cleanTitle=title.trim();
+   const amount=Number(amountRaw);
+   
+   if(cleanTitle===""){
+      return null;
+   }
+   if(amountRaw.trim()===""||!Number.isFinite(amount)||amount<=0){
+      return null;
+   }
+   if(!Object.values(Category).includes(category as Category)){
+      return null;
+   }
+   return{
+      title:cleanTitle,
+      amount:amount,
+      category:category as Category,
+   };
+}
+
+
 
 /* -------------------------------------------------------------------------
    TASK 6 — Core logic
@@ -56,6 +105,25 @@ let nextId = 1;
    ------------------------------------------------------------------------- */
 // function total(): number { ... }
 // function breakdown(): SummaryRow[] { ... }
+function total():number{
+   return expenses.reduce((sum,expense)=>sum+expense.amount,0);
+}
+function breakdown():SummaryRow[]{
+   const totals:Breakdown={
+      [Category.Food]:0,
+      [Category.Travel]:0,
+      [Category.Bills]:0,
+      [Category.Other]:0,
+   };
+   for(const expense of expenses){
+      totals[expense.category]+=expense.amount;
+   }
+   return Object.values(Category).map((category)=>({
+      category,
+      total:totals[category],
+   }));
+}
+
 
 /* -------------------------------------------------------------------------
    TASK 7 — DOM wiring + render (LU: TypeTasks UI, Build & Ship)
@@ -71,3 +139,68 @@ let nextId = 1;
 
 /* Call render() once on load so the UI reflects the (empty) state. */
 // render();
+const form=document.getElementById(
+   "expense-form"
+) as HTMLFormElement;
+const titleInput=document.getElementById(
+   "title"
+) as HTMLInputElement;
+const amountInput=document.getElementById(
+   "amount"
+) as HTMLInputElement;
+const categoryInput=document.getElementById(
+   "category"
+) as HTMLSelectElement; 
+const errorElement=document.getElementById(
+   "error"
+) as HTMLParagraphElement;
+const listElement=document.getElementById(
+   "list"
+) as HTMLUListElement;
+const totalElement=document.getElementById(
+   "total"
+) as HTMLParagraphElement;
+const breakdownElement=document.getElementById(
+   "breakdown"
+) as HTMLUListElement;
+function render():void{
+   listElement.innerHTML="";
+   for(const expense of expenses){
+      const li=document.createElement("li");
+      const details: ExpenseUpdate={
+         title:expense.title,
+         category:expense.category,
+      };
+      li.textContent='${details.title} (${details.category}): $${expense.amount.toFixed(2)}';
+      listElement.appendChild(li);
+   }
+   totalElement.textContent='Total: $${total().toFixed(2)}';
+   breakdownElement.innerHTML="";
+   for(const row of breakdown()){
+      const li=document.createElement("li");
+      li.textContent='${row.category}: $${row.total.toFixed(2)}';
+      breakdownElement.appendChild(li);
+   }
+}
+form.addEventListener("submit",(event:SubmitEvent)=>{
+   event.preventDefault();
+   const newExpense=toNewExpense(
+      titleInput.value,
+      amountInput.value,
+      categoryInput.value,
+   );
+   if(newExpense===null){
+      errorElement.textContent="Invalid input. Please check your entries.";
+      return;
+   }
+   errorElement.textContent="";
+   const expense:Expense={
+      id:nextId++,
+      ...newExpense,
+   };
+   nextId++;
+   expenses.push(expense);
+   form.reset();
+   render();
+});
+render();
